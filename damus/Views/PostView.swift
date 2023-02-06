@@ -115,19 +115,21 @@ struct PostView: View {
             guard let mimeType = type.preferredMIMEType else { return }
             guard let fileExtension = type.preferredFilenameExtension else { return }
 
+            guard let imageData = try? await newItem.loadTransferable(type: Data.self) else {
+                print("No supported content type found.")
+                return
+            }
+            
+            let uploadingText = "[uploading...]"
             do {
-                if let imageData = try await newItem.loadTransferable(type: Data.self) {
-                    let uploadingText = "[uploading...]"
-                    post += "\n\n\(uploadingText)"
-                    
-                    let urlString = try await uploadImage(mimeType: mimeType, fileExtension: fileExtension, imageData: imageData)
-                    
-                    post = post.replacingOccurrences(of: uploadingText, with: urlString)
-                } else {
-                    print("No supported content type found.")
-                }
+                post += "\n\(uploadingText)"
+                
+                let urlString = try await uploadImage(mimeType: mimeType, fileExtension: fileExtension, imageData: imageData)
+                
+                post = post.replacingOccurrences(of: uploadingText, with: urlString)
             } catch {
-                print(error)
+                print(error) // TODO: Show alert
+                post = post.replacingOccurrences(of: "\n\(uploadingText)", with: "")
             }
         }
     }
