@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import PhotosUI
 
 enum NostrPostResult {
     case post(NostrPost)
@@ -17,6 +18,8 @@ let POST_PLACEHOLDER = NSLocalizedString("Type your post here...", comment: "Tex
 struct PostView: View {
     @State var post: String = ""
     @FocusState var focus: Bool
+    
+    @State var selectedItem: PhotosPickerItem? = nil
     
     let replying_to: NostrEvent?
     let references: [ReferencedId]
@@ -63,11 +66,18 @@ struct PostView: View {
 
                 Spacer()
 
-                if !is_post_empty {
-                    Button(NSLocalizedString("Post", comment: "Button to post a note.")) {
-                        self.send_post()
+                PhotosPicker(
+                    selection: $selectedItem,
+                    photoLibrary: .shared()) {
+                        Image(systemName: "photo")
                     }
+
+                Spacer()
+                
+                Button(NSLocalizedString("Post", comment: "Button to post a note.")) {
+                    self.send_post()
                 }
+                .disabled(is_post_empty)
             }
             .padding([.top, .bottom], 4)
 
@@ -93,13 +103,65 @@ struct PostView: View {
                 }.zIndex(1)
             }
         }
+        .padding()
         .onAppear() {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 self.focus = true
             }
         }
-        .padding()
+        .task(id: selectedItem) {
+            guard let newItem = selectedItem else { return }
+            guard let type = newItem.supportedContentTypes.first else { return }
+            guard let mimeType = type.preferredMIMEType else { return }
+            guard let fileExtension = type.preferredFilenameExtension else { return }
+
+            do {
+                if let imageData = try await newItem.loadTransferable(type: Data.self) {
+                    let uploadingText = "[uploading...]"
+                    post += "\n\n\(uploadingText)"
+                    
+                    let urlString = try await uploadImage(mimeType: mimeType, fileExtension: fileExtension, imageData: imageData)
+                    
+                    post = post.replacingOccurrences(of: uploadingText, with: urlString)
+                } else {
+                    print("No supported content type found.")
+                }
+            } catch {
+                print(error)
+            }
+        }
     }
+}
+
+func uploadImage(mimeType: String, fileExtension: String, imageData: Data) async throws -> String {
+    let url = URL(string: "https://nostr.build/upload.php")!
+    let boundary = UUID().uuidString
+    let paramName = "fileToUpload"
+    let fileName = "file." + fileExtension
+    
+    var urlRequest = URLRequest(url: url)
+    urlRequest.httpMethod = "POST"
+    urlRequest.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
+
+    var bodyData = Data()
+    bodyData.append("\r\n--\(boundary)\r\n".data(using: .utf8)!)
+    bodyData.append("Content-Disposition: form-data; name=\"\(paramName)\"; filename=\"\(fileName)\"\r\n".data(using: .utf8)!)
+    bodyData.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
+    bodyData.append(imageData)
+    bodyData.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
+    
+    let response = try await URLSession.shared.upload(for: urlRequest, from: bodyData)
+    guard let htmlString = String(data: response.0, encoding: .utf8) else { throw UploadError.invalidEncoding }
+    
+    let regex = /https:\/\/nostr\.build\/(?:i|av)\/nostr\.build_[a-z0-9]{64}\.[a-z0-9]+/
+    guard let match = htmlString.firstMatch(of: regex) else { throw UploadError.notFoundUrl }
+    
+    return String(match.0)
+}
+
+enum UploadError: Error {
+    case invalidEncoding
+    case notFoundUrl
 }
 
 func get_searching_string(_ post: String) -> String? {
