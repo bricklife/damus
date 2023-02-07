@@ -66,20 +66,18 @@ struct PostView: View {
 
                 Spacer()
 
-                PhotosPicker(
-                    selection: $selectedItem,
-                    photoLibrary: .shared()) {
-                        Image(systemName: "photo")
-                    }
+                PhotosPicker(selection: $selectedItem, photoLibrary: .shared()) {
+                    Image(systemName: "photo")
+                }
 
                 Spacer()
                 
                 Button(NSLocalizedString("Post", comment: "Button to post a note.")) {
-                        showPrivateKeyWarning = contentContainsPrivateKey(self.post)
+                    showPrivateKeyWarning = contentContainsPrivateKey(self.post)
 
-                        if !showPrivateKeyWarning {
-                            self.send_post()
-                        }
+                    if !showPrivateKeyWarning {
+                        self.send_post()
+                    }
                 }
                 .disabled(is_post_empty)
             }
