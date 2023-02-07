@@ -19,7 +19,6 @@ struct PostView: View {
     @State var post: String = ""
     @FocusState var focus: Bool
     @State var showPrivateKeyWarning: Bool = false
-    
     @State var selectedItem: PhotosPickerItem? = nil
     
     let replying_to: NostrEvent?
