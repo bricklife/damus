@@ -20,6 +20,7 @@ struct PostView: View {
     @FocusState var focus: Bool
     @State var showPrivateKeyWarning: Bool = false
     @State var selectedItem: PhotosPickerItem? = nil
+    @State var isUploading = false
     
     let replying_to: NostrEvent?
     let references: [ReferencedId]
@@ -69,6 +70,7 @@ struct PostView: View {
                 PhotosPicker(selection: $selectedItem, photoLibrary: .shared()) {
                     Image(systemName: "photo")
                 }
+                .disabled(isUploading)
 
                 Spacer()
                 
@@ -133,47 +135,17 @@ struct PostView: View {
             let uploadingText = "[uploading...]"
             do {
                 post += "\n\(uploadingText)"
-                
-                let urlString = try await uploadImage(mimeType: mimeType, fileExtension: fileExtension, imageData: imageData)
-                
-                post = post.replacingOccurrences(of: uploadingText, with: urlString)
+                let url = try await MediaUploader.shared.upload(mimeType: mimeType, fileExtension: fileExtension, data: imageData)
+                post = post.replacingOccurrences(of: uploadingText, with: url.absoluteString)
             } catch {
                 print(error) // TODO: Show alert
                 post = post.replacingOccurrences(of: "\n\(uploadingText)", with: "")
             }
         }
+        .onReceive(MediaUploader.shared.$isUploading) { isUploading in
+            self.isUploading = isUploading
+        }
     }
-}
-
-func uploadImage(mimeType: String, fileExtension: String, imageData: Data) async throws -> String {
-    let url = URL(string: "https://nostr.build/upload.php")!
-    let boundary = UUID().uuidString
-    let paramName = "fileToUpload"
-    let fileName = "file." + fileExtension
-    
-    var urlRequest = URLRequest(url: url)
-    urlRequest.httpMethod = "POST"
-    urlRequest.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-
-    var bodyData = Data()
-    bodyData.append("\r\n--\(boundary)\r\n".data(using: .utf8)!)
-    bodyData.append("Content-Disposition: form-data; name=\"\(paramName)\"; filename=\"\(fileName)\"\r\n".data(using: .utf8)!)
-    bodyData.append("Content-Type: \(mimeType)\r\n\r\n".data(using: .utf8)!)
-    bodyData.append(imageData)
-    bodyData.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
-    
-    let response = try await URLSession.shared.upload(for: urlRequest, from: bodyData)
-    guard let htmlString = String(data: response.0, encoding: .utf8) else { throw UploadError.invalidEncoding }
-    
-    let regex = /https:\/\/nostr\.build\/(?:i|av)\/nostr\.build_[a-z0-9]{64}\.[a-z0-9]+/
-    guard let match = htmlString.firstMatch(of: regex) else { throw UploadError.notFoundUrl }
-    
-    return String(match.0)
-}
-
-enum UploadError: Error {
-    case invalidEncoding
-    case notFoundUrl
 }
 
 func get_searching_string(_ post: String) -> String? {
