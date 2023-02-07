@@ -105,12 +105,20 @@ struct PostView: View {
                 }.zIndex(1)
             }
         }
-        .padding()
         .onAppear() {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                 self.focus = true
             }
         }
+        .padding()
+        .alert(NSLocalizedString("Note contains \"nsec1\" private key. Are you sure?", comment: "Alert user that they might be attempting to paste a private key and ask them to confirm."), isPresented: $showPrivateKeyWarning, actions: {
+            Button(NSLocalizedString("No", comment: "Button to cancel out of posting a note after being alerted that it looks like they might be posting a private key."), role: .cancel) {
+                showPrivateKeyWarning = false
+            }
+            Button(NSLocalizedString("Yes, Post with Private Key", comment: "Button to proceed with posting a note even though it looks like they might be posting a private key."), role: .destructive) {
+                self.send_post()
+            }
+        })
         .task(id: selectedItem) {
             guard let newItem = selectedItem else { return }
             guard let type = newItem.supportedContentTypes.first else { return }
@@ -134,14 +142,6 @@ struct PostView: View {
                 post = post.replacingOccurrences(of: "\n\(uploadingText)", with: "")
             }
         }
-        .alert(NSLocalizedString("Note contains \"nsec1\" private key. Are you sure?", comment: "Alert user that they might be attempting to paste a private key and ask them to confirm."), isPresented: $showPrivateKeyWarning, actions: {
-            Button(NSLocalizedString("No", comment: "Button to cancel out of posting a note after being alerted that it looks like they might be posting a private key."), role: .cancel) {
-                showPrivateKeyWarning = false
-            }
-            Button(NSLocalizedString("Yes, Post with Private Key", comment: "Button to proceed with posting a note even though it looks like they might be posting a private key."), role: .destructive) {
-                self.send_post()
-            }
-        })
     }
 }
 
